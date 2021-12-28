@@ -14,15 +14,23 @@ This is the motive I am developping this software.
 ## Goal
 - Dynamic parsing like Nez.
 - Both of CLI and Web interface like PEGjs.
-- Good performance.
+- Good performance.(may be...)
 - Needs no language other than PEG when parsing.
 - No need to be online.
+
+# Compile
+It requires typescript.
+In case of using nodejs, type below in terminal.
+
+```sh
+npm i --save-dev @types/node
+```
 
 # Name of this software
 The name of this software is JIROKICHI in japanese.
 One day, my personal other project was named by other person, even I named it.
 Of cource, OSS is OSS, but I was said 'Change your name of project' without contribution.
 The name was just stolen. 
-And so, I name my project and this is my right.
-The English name of this project is RatThief and Japanese name of this is Jirokichi.
+And so, I name my hobby project and this is my right.
+The English name of this project is RatThief and Japanese name of this is JIROKICHI.
 If you want to change the name, write code by yourself.

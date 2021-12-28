@@ -10,11 +10,6 @@ interface Ast {
   node: Ast[]
 }
 
-interface Token{
-  kind: number,
-  token: string
-}
-
 const kind = {
   sep: 0,
   blank: 1,
@@ -36,8 +31,7 @@ const isTokenOf = (token: PegToken, word: string) => {
   return false
 }
 
-
-const isValidString = (token: Token, code: string, num: number)=>{
+const isValidString = (token: PegToken, code: string, num: number)=>{
   for(let n=0; n<token.token.length;n++){
     if(code[num+n] !== token.token[n]) return false
   }
@@ -214,6 +208,10 @@ const gotoBrace = (peg: PegToken[], cursor: number, former: boolean=true) => {
   return cursor
 }
 
+interface Stock{
+  ast: Ast[],
+  cursor: number
+}
 
 /*
 * Recursive efficient pack rat parser function.
@@ -221,17 +219,12 @@ const gotoBrace = (peg: PegToken[], cursor: number, former: boolean=true) => {
 */
 const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
   code: string, startLocation: number, ast: Ast,
-  shortmode: boolean=false, packrat: boolean=true, stock: any[],
+  packrat: boolean=true, stock: Stock[][],
   transient: boolean=false
 ) => {
   if(packrat && stock[grammerNumber][startLocation]) {
-    ast['node'] = stock[grammerNumber][startLocation][0]
-    if(shortmode && ast['node'].length === 1){
-      ast['name'] = ast['node'][0]['name']
-      ast['value'] = ast['node'][0]['value']
-      ast['node'] = ast['node'][0]['node']
-    }
-    return stock[grammerNumber][startLocation][1]
+    ast['node'] = stock[grammerNumber][startLocation].ast
+    return stock[grammerNumber][startLocation].cursor
   }
   const grammer: PegToken[] = peg[grammerNumber]
   let depth = 0 // Depth of brace.
@@ -260,14 +253,14 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
   ast['value'] = ''
   let node: Array<Array<Ast>> = []
   node.push([])
-  let pegNum = 0
+  let pegCursor = 0
   let token: PegToken
   let wordLength = 0
   if(code.length <= startLocation){
     return -1
   }
-  while(pegNum < grammer.length && cursors[0] < code.length){
-    token = grammer[pegNum]
+  while(pegCursor < grammer.length && cursors[0] < code.length){
+    token = grammer[pegCursor]
     //----------
     // Error case
     //----------
@@ -281,15 +274,15 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
         continue
       }
       else if(token.kind === kind.token && token.token === '+'){
-        if(plusThrough[pegNum] === false){
-          plusThrough[pegNum] = true
+        if(plusThrough[pegCursor] === false){
+          plusThrough[pegCursor] = true
           setError()
         }
         else{ removeError() }
         continue
       }
       else if(token.kind === kind.token && token.token === '('){
-        pegNum = gotoBrace(grammer, pegNum+1, true) + 1
+        pegCursor = gotoBrace(grammer, pegCursor+1, true) + 1
         cursors[depth] = cursors[depth-1]
         continue
       }
@@ -304,14 +297,14 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
       else{
         if(depth===0)cursors[depth] = startLocation
         else cursors[depth] = cursors[depth-1]
-        wordLength = gotoNextSlash(grammer, pegNum)
+        wordLength = gotoNextSlash(grammer, pegCursor)
         // if no slash
         if(wordLength === -1) {
-          pegNum = gotoBrace(grammer, pegNum, true)
+          pegCursor = gotoBrace(grammer, pegCursor, true)
           continue
         }
         else {
-          pegNum = wordLength
+          pegCursor = wordLength
           setError()
           continue
         }
@@ -329,9 +322,9 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
         // Error case Or
         //----------
         if(token.token === '/'){
-          wordLength = gotoBrace(grammer, pegNum, true)
+          wordLength = gotoBrace(grammer, pegCursor, true)
           if(wordLength !== -1){
-            pegNum = wordLength
+            pegCursor = wordLength
             continue
           }
           else{
@@ -357,11 +350,11 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
         // Repeat
         //----------
         else if(token.token === '*' || token.token === '+'){
-          plusThrough[pegNum] = token.token === '+' ? true: false
-          if(grammer[pegNum-1].kind === kind.token
-            &&grammer[pegNum-1].token === ')'){
+          plusThrough[pegCursor] = token.token === '+' ? true: false
+          if(grammer[pegCursor-1].kind === kind.token
+            &&grammer[pegCursor-1].token === ')'){
             if(isError){
-              pegNum = gotoBrace(grammer, pegNum-2, false)
+              pegCursor = gotoBrace(grammer, pegCursor-2, false)
               continue
             }
             else{
@@ -371,7 +364,7 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
           }
           else {
             if(isError) {
-              pegNum--
+              pegCursor--
               continue
             }
             else{
@@ -385,7 +378,7 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
         else if(token.token==='&'){
           // Do not save log.
           for(let n = startLocation; n < cursors[depth]; n++){
-            stock.map(x=>x[n]=null)
+            stock.map(x=>x[n]={ast:[], cursor: 0})
           }
         }
         //----------
@@ -413,7 +406,7 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
         else{
           let newAst = {name: token.token, value: '', node:[]}
           wordLength = parseByOnePeg(peg, token.link, token.token, code, cursors[depth],
-            newAst, shortmode, packrat, stock, token.transient)
+            newAst, packrat, stock, token.transient)
           if (wordLength === -1) setError()
           else{
             cursors[depth] = wordLength
@@ -450,7 +443,7 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
         checkIgnore()
       }
     }
-    pegNum++
+    pegCursor++
   }
 
   //console.log(errordepth !== -1 ? 'Bad end': 'Good end')
@@ -461,12 +454,7 @@ const parseByOnePeg = (peg: PegToken[][], grammerNumber: number, name: string,
   if(depth !== 0)return -1
   if(node[0].length !== 0)ast['node'] = node[0]
   else ast['node'] = new Array()
-  if(packrat && !transient) stock[grammerNumber][startLocation] = [ast['node'], cursors[0]]
-  if(shortmode && ast['node'].length === 1){
-    ast['name'] = ast['node'][0]['name']
-    ast['value'] = ast['node'][0]['value']
-    ast['node'] = ast['node'][0]['node']
-  }
+  if(packrat && !transient) stock[grammerNumber][startLocation] = {ast: ast['node'], cursor: cursors[0]}
   return cursors[0]
 }
 
@@ -475,20 +463,21 @@ export class Peg{
   pegStruct: PegToken[][]
   ast!: Ast
   pegCodes: PegToken[][]
-  stock!: string[][]
+  stock?: Stock[][]
   constructor(pegstring: string){
     this.pegCodes = pegstring.trim().split('\n').map(tokenize(options))
     this.pegString = pegstring
     this.pegStruct = makePegStruct(this.pegCodes)
   }
   parse(code: string,
-    packrat: boolean = true,
-    shortmode: boolean = false){
+    packrat: boolean = true){
     this.ast = {name: '', value:'', node:[]}
-    this.stock = new Array(this.pegCodes.length).fill(new Array())
+    this.stock = new Array(this.pegCodes.length).fill([])
     const res = parseByOnePeg(this.pegStruct, 0, this.pegCodes[0][0].token,
-      code, 0, this.ast, shortmode, packrat, this.stock)
+      code, 0, this.ast, packrat, this.stock)
     if(res === -1) console.log('Syntax error')
+    delete this.stock
+    this.stock = []
     return this.ast
   }
 }
